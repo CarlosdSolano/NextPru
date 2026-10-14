@@ -179,9 +179,10 @@ function plantillaAuto(auto) {
           ${formatoCOP.format(auto.precio)}
           ${descuento ? `<s><span class="sr-only">Antes </span>${formatoCOP.format(auto.original)}</s>` : ''}
         </p>
-        <a class="btn btn--wa btn--bloque" href="${linkWhatsApp(mensaje)}" target="_blank" rel="noopener">
-          Preguntar por WhatsApp
-        </a>
+        <div class="auto__acciones">
+          <button class="btn btn--detalle" type="button" data-ver-auto aria-label="Ver detalle del ${escaparHTML(nombre)}">Ver detalle</button>
+          <a class="btn btn--wa" href="${linkWhatsApp(mensaje)}" target="_blank" rel="noopener">WhatsApp</a>
+        </div>
       </div>
     </article>`;
 }
@@ -234,8 +235,11 @@ function plantillaVacio() {
     </div>`;
 }
 
+let autosMostrados = [];
+
 function renderAutos() {
   const lista = autosFiltrados();
+  autosMostrados = lista;
   const contenedor = $('#lista-autos');
 
   contenedor.innerHTML = lista.length ? lista.map(plantillaAuto).join('') : plantillaVacio();
@@ -262,6 +266,81 @@ function limpiarFiltros() {
   estado.marcas.clear();
   estado.precioMax = 0;
   actualizar();
+}
+
+// ========================================
+// DETALLE DEL AUTO A PANTALLA COMPLETA
+// Al seleccionar un carro se abre configurador.html dentro de un iframe (así su hoja de estilos
+// queda aislada de la del sitio) y se le envían los autos que se están viendo.
+let visorAbierto = null;
+
+function abrirVisor(indice, origen) {
+  if (visorAbierto || !autosMostrados[indice]) return;
+
+  const datos = autosMostrados.map(auto => {
+    const nombre = `${auto.marca} ${auto.modelo} ${auto.anio}`;
+    return {
+      marca: auto.marca, modelo: auto.modelo, anio: auto.anio, km: auto.km,
+      precio: auto.precio, descuento: porcentajeDescuento(auto),
+      foto: fotosDe(auto)[0],
+      wa: linkWhatsApp(`Hola, quiero información del ${nombre} de ${formatoCOP.format(auto.precio)}.`)
+    };
+  });
+
+  const elegido = datos[indice];
+  const visor = document.createElement('div');
+  visor.className = 'visor';
+  visor.setAttribute('role', 'dialog');
+  visor.setAttribute('aria-modal', 'true');
+  visor.setAttribute('aria-label', `Detalle del ${elegido.marca} ${elegido.modelo} ${elegido.anio}`);
+  visor.innerHTML = `
+    <iframe class="visor__marco" src="configurador.html" title="Detalle del ${escaparHTML(elegido.marca)} ${escaparHTML(elegido.modelo)}"></iframe>
+    <button class="visor__cerrar" type="button" aria-label="Cerrar el detalle"></button>`;
+
+  // Lo de atrás no debe recibir foco ni lectura mientras el detalle está abierto
+  const bloqueados = Array.from(document.body.children).filter(el => el.tagName !== 'SCRIPT');
+  bloqueados.forEach(el => { el.inert = true; });
+  document.body.appendChild(visor);
+  document.body.classList.add('visor-abierto');
+
+  const marco = $('.visor__marco', visor);
+  const cerrar = $('.visor__cerrar', visor);
+
+  function cerrarVisor() {
+    window.removeEventListener('message', alRecibir);
+    document.removeEventListener('keydown', alTeclear);
+    visor.remove();
+    bloqueados.forEach(el => { el.inert = false; });
+    document.body.classList.remove('visor-abierto');
+    visorAbierto = null;
+    if (origen && origen.isConnected) origen.focus();
+  }
+  function alRecibir(e) {
+    if (e.source === marco.contentWindow && e.data && e.data.tipo === 'cerrar') cerrarVisor();
+  }
+  function alTeclear(e) { if (e.key === 'Escape') cerrarVisor(); }
+
+  marco.addEventListener('load', () => {
+    marco.contentWindow.postMessage({ tipo: 'init', autos: datos, inicio: indice }, '*');
+  });
+  window.addEventListener('message', alRecibir);
+  document.addEventListener('keydown', alTeclear);
+  cerrar.addEventListener('click', cerrarVisor);
+  cerrar.focus();
+  visorAbierto = visor;
+}
+
+function iniciarVisor() {
+  $('#lista-autos').addEventListener('click', e => {
+    const tarjeta = e.target.closest('.auto');
+    if (!tarjeta) return;
+    const boton = e.target.closest('[data-ver-auto]');
+    // También abre al tocar la foto (menos sus flechas)
+    const enFoto = e.target.closest('.auto__foto') && !e.target.closest('.auto__flecha');
+    if (!boton && !enFoto) return;
+    const indice = $$('.auto', $('#lista-autos')).indexOf(tarjeta);
+    abrirVisor(indice, boton || tarjeta.querySelector('[data-ver-auto]'));
+  });
 }
 
 // ========================================
@@ -455,6 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
   crearTickerMarcas();
   iniciarHero();
   iniciarEncabezado();
+  iniciarVisor();
   iniciarTabs();
   iniciarFormularioCompra();
   iniciarFormularioVenta();

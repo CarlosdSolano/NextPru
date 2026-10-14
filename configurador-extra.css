@@ -1,0 +1,18 @@
+/* Ajustes propios de NextAuto. configurador.css se deja intacto; aquí solo va lo que cambia
+   porque las fotos de los carros no son recortes con fondo transparente ni tienen nombres cortos. */
+
+/* Difumina los bordes de la foto para que se funda con el fondo negro */
+.tesla-slide__img-car {
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 52%, transparent 98%);
+          mask-image: radial-gradient(ellipse at center, #000 52%, transparent 98%);
+}
+
+/* Marca + modelo es más largo que "Meridian": la caja del nombre ocupa todo el ancho */
+.tesla-slide-aside__name { width: 100%; }
+
+/* Ventanas bajas: la página deja de bloquear el scroll (ver configurador.js) */
+html.scroll-nativo body { overflow-y: auto; }
+
+/* Mensaje si no cargan las librerías (sin internet) */
+#aviso { position: fixed; inset: 0; display: grid; place-items: center; padding: 2rem; text-align: center; }
+#aviso[hidden] { display: none; }

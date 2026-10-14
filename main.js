@@ -283,6 +283,9 @@ function abrirVisor(indice, origen) {
       marca: auto.marca, modelo: auto.modelo, anio: auto.anio, km: auto.km,
       precio: auto.precio, descuento: porcentajeDescuento(auto),
       foto: fotosDe(auto)[0],
+      fotos: fotosDe(auto),
+      modelo3d: auto.modelo3d || null,
+      giro360: auto.giro360 || null,
       wa: linkWhatsApp(`Hola, quiero información del ${nombre} de ${formatoCOP.format(auto.precio)}.`)
     };
   });

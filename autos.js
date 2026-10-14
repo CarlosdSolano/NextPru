@@ -21,6 +21,7 @@ const PRECIOS_MAX = [70000000, 90000000, 110000000, 130000000];
 // - fotos: (opcional) varias fotos del mismo carro, en lista. Si la pones, reemplaza a img y la tarjeta
 //   muestra flechas para pasar de una foto a otra. Ejemplo:
 //   fotos: ['img/audi-a4-1.jpg', 'img/audi-a4-2.jpg', 'img/audi-a4-3.jpg']
+// - giro360: (opcional) vista 360° arrastrable. carpeta con los fotogramas 01.webp, 02.webp... y cuántos son.
 // - original: precio antes del descuento (el % se calcula solo; usa el mismo valor de precio si no hay descuento)
 // - km: kilometraje. OJO: son valores de ejemplo, reemplázalos por los reales.
 const autos = [
@@ -34,10 +35,11 @@ const autos = [
   { marca: 'Hyundai',    modelo: 'Tucson', anio: 2022, km: 29000, precio:  98000000, original: 108000000, img: 'img/hyundai.jpg' },
   { marca: 'Kia',        modelo: 'Sportage', anio: 2023, km: 12000, precio: 102000000, original: 102000000, img: 'img/kia.jpg' },
   { marca: 'Mazda',      modelo: 'CX-30',  anio: 2022, km: 27000, precio:  88000000, original:  97000000, img: 'img/mazda.jpg' },
-  { marca: 'Mercedes-Benz', modelo: 'Clase A', anio: 2021, km: 38000, precio: 135000000, original: 150000000, img: 'img/mercedes.jpg' },
+  { marca: 'Mercedes-Benz', modelo: 'GLC', anio: 2021, km: 38000, precio: 135000000, original: 150000000, img: 'img/autos/mercedes1.jpg', fotos: ['img/autos/mercedes1.jpg', 'img/autos/mercedes2.jpg'], giro360: { carpeta: 'modelos/360/mercedes-glc', frames: 60 } },
   { marca: 'Nissan',     modelo: 'Kicks',  anio: 2023, km: 14000, precio:  79000000, original:  79000000, img: 'img/nissan.jpg' },
   { marca: 'Renault',    modelo: 'Duster', anio: 2022, km: 36000, precio:  72000000, original:  80000000, img: 'img/renault.jpg' },
   { marca: 'Suzuki',     modelo: 'Vitara', anio: 2022, km: 24000, precio:  75000000, original:  75000000, img: 'img/suzuki.jpg' },
   { marca: 'Toyota',     modelo: 'Corolla Cross', anio: 2023, km: 16000, precio: 108000000, original: 118000000, img: 'img/toyota.jpg' },
-  { marca: 'Volkswagen', modelo: 'Taos',   anio: 2023, km: 15000, precio: 110000000, original: 125000000, img: 'img/vw.jpg' }
+  { marca: 'Volkswagen', modelo: 'T-Cross', anio: 2023, km: 15000, precio: 110000000, original: 125000000, img: 'img/autos/vw1.jpg', fotos: ['img/autos/vw1.jpg', 'img/autos/vw2.jpg'], giro360: { carpeta: 'modelos/360/volkswagen-t-cross', frames: 60 } },
+  { marca: 'Volvo', modelo: 'V40', anio: 2020, km: 42000, precio: 82000000, original: 89000000, img: 'img/autos/volvo1.jpg', fotos: ['img/autos/volvo1.jpg', 'img/autos/volvo2.jpg'], giro360: { carpeta: 'modelos/360/volvo-v40', frames: 60 } }
 ];

@@ -65,6 +65,9 @@ function crearSlides(autos) {
         : "Modelo " + a.anio + " con " + km + " km, disponible en Bogotá.",
       color: colorDe(a.marca),
       imgUrl: a.foto,
+      modelo3d: a.modelo3d || null,
+      giro360: a.giro360 || null,
+      fotos: Array.isArray(a.fotos) && a.fotos.length ? a.fotos : [a.foto],
       wa: a.wa,
       anio: a.anio,
       km: a.km,
@@ -342,6 +345,187 @@ class SlideParams extends React.Component {
   }
 }
 
+// Visor del detalle del vehículo. Prioridad:
+//  1) giro360: secuencia de fotogramas (vista 360° arrastrable con ratón o dedo, flechas del teclado)
+//  2) modelo3d: un .glb REAL mostrado con <model-viewer>
+//  3) fotografías del inventario (alternativa si lo anterior no existe o falla)
+class Giro360 extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { frame: 0, cargados: 0, error: false, girando: true };
+    this.imagenes = [];
+    this.arrastre = null;
+    this.alBajar = this.alBajar.bind(this);
+    this.alMover = this.alMover.bind(this);
+    this.alSoltar = this.alSoltar.bind(this);
+    this.alTecla = this.alTecla.bind(this);
+    this.alternar = this.alternar.bind(this);
+  }
+  url(i) {
+    const { carpeta } = this.props.giro;
+    return carpeta + "/" + String(i + 1).padStart(2, "0") + ".webp?v=2";
+  }
+  componentDidMount() {
+    const total = this.props.giro.frames;
+    for (let i = 0; i < total; i++) {
+      const img = new Image();
+      img.onload = () => { if (!this.muerto) this.setState(s => ({ cargados: s.cargados + 1 })); };
+      img.onerror = () => { if (!this.muerto && i === 0) { this.setState({ error: true }); this.props.alFallar(); } };
+      img.src = this.url(i);
+      this.imagenes.push(img);
+    }
+    this.iniciarAuto();
+  }
+  componentWillUnmount() { this.muerto = true; this.detenerAuto(); }
+  iniciarAuto() {
+    this.detenerAuto();
+    this.reloj = setInterval(() => {
+      if (this.state.cargados >= this.props.giro.frames) this.mover(-1);
+    }, 70);
+  }
+  detenerAuto() { if (this.reloj) clearInterval(this.reloj); this.reloj = null; }
+  mover(paso) {
+    const total = this.props.giro.frames;
+    this.setState(s => ({ frame: (((s.frame + paso) % total) + total) % total }));
+  }
+  alternar() {
+    if (this.state.girando) { this.detenerAuto(); this.setState({ girando: false }); }
+    else { this.iniciarAuto(); this.setState({ girando: true }); }
+  }
+  alBajar(e) {
+    this.detenerAuto();
+    this.setState({ girando: false });
+    this.arrastre = { x: e.clientX, base: this.state.frame };
+    if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  alMover(e) {
+    if (!this.arrastre) return;
+    const total = this.props.giro.frames;
+    const ancho = e.currentTarget.clientWidth || 600;
+    // Arrastrar todo el ancho del visor ≈ una vuelta completa
+    const pasos = Math.round(((e.clientX - this.arrastre.x) / ancho) * total);
+    const nuevo = (((this.arrastre.base - pasos) % total) + total) % total;
+    if (nuevo !== this.state.frame) this.setState({ frame: nuevo });
+  }
+  alSoltar() { this.arrastre = null; }
+  alTecla(e) {
+    if (e.key === "ArrowLeft") { this.detenerAuto(); this.setState({ girando: false }); this.mover(1); e.preventDefault(); }
+    if (e.key === "ArrowRight") { this.detenerAuto(); this.setState({ girando: false }); this.mover(-1); e.preventDefault(); }
+  }
+  render() {
+    const total = this.props.giro.frames;
+    const listo = this.state.cargados >= total;
+    return h("div", { className: "giro360" },
+      h("div", {
+        className: "giro360__escena",
+        tabIndex: 0,
+        role: "img",
+        "aria-label": "Vista 360° de " + this.props.alt + ". Arrastra o usa las flechas del teclado para girar.",
+        onPointerDown: this.alBajar,
+        onPointerMove: this.alMover,
+        onPointerUp: this.alSoltar,
+        onPointerCancel: this.alSoltar,
+        onKeyDown: this.alTecla
+      },
+        h("img", { className: "giro360__img", src: this.url(this.state.frame), alt: "", draggable: false }),
+        !listo ? h("div", { className: "giro360__carga" }, "Cargando vista 360° " + Math.round(this.state.cargados / total * 100) + " %") : null
+      ),
+      h("div", { className: "visor-auto-3d__controles" },
+        h("button", { type: "button", onClick: () => { this.detenerAuto(); this.setState({ girando: false }); this.mover(1); }, "aria-label": "Girar a la izquierda" }, "‹"),
+        h("button", { type: "button", className: "giro360__play", onClick: this.alternar, "aria-label": this.state.girando ? "Pausar giro" : "Girar automáticamente" }, this.state.girando ? "❚❚" : "▶"),
+        h("button", { type: "button", onClick: () => { this.detenerAuto(); this.setState({ girando: false }); this.mover(-1); }, "aria-label": "Girar a la derecha" }, "›"),
+        h("span", { className: "giro360__hint" }, "Arrastra para girar 360°")
+      )
+    );
+  }
+}
+
+class FotoInteractiva extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { indice: 0, modeloDisponible: !!props.modelo3d, errorModelo: false, error360: false };
+    this.inicioX = null;
+    this.arrastre = false;
+    this.alArrancar = this.alArrancar.bind(this);
+    this.alSoltar = this.alSoltar.bind(this);
+    this.anterior = this.anterior.bind(this);
+    this.siguiente = this.siguiente.bind(this);
+  }
+  componentDidUpdate(prevProps) {
+    if (prevProps.modelo3d !== this.props.modelo3d) this.setState({ modeloDisponible: !!this.props.modelo3d, errorModelo: false, indice: 0 });
+  }
+  alArrancar(e) {
+    this.inicioX = e.clientX; this.arrastre = true;
+    if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  alSoltar(e) {
+    if (!this.arrastre || this.inicioX === null) return;
+    const dx = e.clientX - this.inicioX;
+    if (Math.abs(dx) > 24) {
+      const total = this.props.fotos.length || 1;
+      this.setState(s => ({ indice: (s.indice + (dx < 0 ? 1 : total - 1)) % total }));
+    }
+    this.inicioX = null; this.arrastre = false;
+  }
+  anterior() { const total = this.props.fotos.length || 1; this.setState(s => ({ indice: (s.indice + total - 1) % total })); }
+  siguiente() { const total = this.props.fotos.length || 1; this.setState(s => ({ indice: (s.indice + 1) % total })); }
+  render() {
+    // 1) Vista 360° por fotogramas
+    if (this.props.giro360 && !this.state.error360) {
+      return h("div", { className: "visor-auto-3d" },
+        h(Giro360, {
+          key: this.props.giro360.carpeta,
+          giro: this.props.giro360,
+          alt: this.props.alt,
+          alFallar: () => this.setState({ error360: true })
+        })
+      );
+    }
+    const fotos = this.props.fotos && this.props.fotos.length ? this.props.fotos : [this.props.imgUrl];
+    const actual = fotos[this.state.indice % fotos.length];
+    const mostrarModelo = this.state.modeloDisponible && !this.state.errorModelo;
+    return h("div", { className: "visor-auto-3d" },
+      mostrarModelo ? h("div", { className: "visor-auto-3d__modelo" },
+        h("model-viewer", {
+          src: this.props.modelo3d,
+          alt: "Modelo 3D interactivo de " + this.props.alt,
+          "camera-controls": true,
+          "touch-action": "pan-y",
+          "interaction-prompt": "auto",
+          "shadow-intensity": "1.1",
+          "exposure": "1.05",
+          "environment-image": "neutral",
+          "tone-mapping": "neutral",
+          "camera-orbit": "35deg 72deg 105%",
+          "min-camera-orbit": "auto 20deg auto",
+          "max-camera-orbit": "auto 100deg auto",
+          "loading": "eager",
+          // En model-viewer el error llega como evento "error" del elemento; se escucha con ref
+          ref: (el) => { if (el && !el.__ok) { el.__ok = true; el.addEventListener("error", () => this.setState({ errorModelo: true, modeloDisponible: false })); } }
+        }),
+        h("div", { className: "visor-auto-3d__etiqueta" }, "MODELO 3D · ARRASTRA PARA GIRAR")
+      ) : h("div", {
+        className: "visor-auto-3d__escena visor-auto-3d__escena--foto",
+        onPointerDown: this.alArrancar,
+        onPointerUp: this.alSoltar,
+        onPointerCancel: this.alSoltar,
+        title: "Arrastra para cambiar entre las fotografías disponibles"
+      }, h("img", {
+        className: "visor-auto-3d__foto",
+        src: actual,
+        alt: this.props.alt,
+        draggable: false,
+        onError: (e) => { e.target.onerror = null; e.target.src = fotoPendienteImg; }
+      })),
+      mostrarModelo ? h("p", { className: "visor-auto-3d__ayuda" }, "Gira el vehículo arrastrándolo con el ratón o el dedo; usa la rueda o pellizca para acercar.") : h("div", { className: "visor-auto-3d__controles" },
+        h("button", { type: "button", onClick: this.anterior, "aria-label": "Vista anterior" }, "‹"),
+        h("span", null, "Vista fotográfica " + (this.state.indice + 1) + " / " + fotos.length),
+        h("button", { type: "button", onClick: this.siguiente, "aria-label": "Vista siguiente" }, "›")
+      )
+    );
+  }
+}
+
 // ========================================
 // SECTION-05: resplandor + fotos (EFFECT-03)
 // ========================================
@@ -405,12 +589,14 @@ class Slide extends React.Component {
           // Las fotos de los carros no traen una placa de sombra aparte, así que solo va la foto
           h(
             "div",
-            { className: "tesla-slide__img" },
-            h("img", {
-              className: "tesla-slide__img-car",
-              src: activeSlide.imgUrl,
-              alt: activeSlide.alt,
-              onError: (e) => { e.target.onerror = null; e.target.src = fotoPendienteImg; },
+            { className: "tesla-slide__img" + (activeSlide.giro360 ? " tesla-slide__img--giro" : "") },
+            h(FotoInteractiva, {
+              key: activeSlide.id,
+              fotos: activeSlide.fotos,
+              imgUrl: activeSlide.imgUrl,
+              modelo3d: activeSlide.modelo3d,
+              giro360: activeSlide.giro360,
+              alt: activeSlide.alt
             })
           )
         )
